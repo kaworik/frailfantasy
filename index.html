@@ -1,11 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Frail Fantasy</title>
+  <meta charset="UTF-8">
+  <title>Frail Fantasy</title>
+  <!-- Подключаем p5.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <!-- Подключаем наш скетч -->
+  <script src="sketch.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+      font-family: "Trebuchet MS", sans-serif;
+      color: white;
+      text-align: center;
+    }
+    .content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+    }
+    h1 {
+      font-size: 3em;
+      margin: 0;
+    }
+    p {
+      font-size: 1.2em;
+      opacity: 0.8;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 0;
+    }
+  </style>
 </head>
 <body>
+  <div class="content">
     <h1>It is Time to meet Frail</h1>
     <p>made using ElectroFrail technology.</p>
+  </div>
 </body>
 </html>
