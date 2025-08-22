@@ -1,0 +1,42 @@
+html, body {
+  height: 100%;
+  min-height: 100vh;
+}
+body, a, a * {
+  cursor: none !important;
+}
+nav a img {
+  transition: transform 0.1s cubic-bezier(0.1, 0.2, 0.2, 2);
+}
+
+nav a:hover img {
+  transform: scale(1.18);
+}
+body {
+  background-color: #ffffff; /* выбери любой цвет, например тёмно-синий */
+}
+.watermark {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 150px;      /* можно изменить размер */
+  opacity: 1;    /* прозрачность для watermark */
+  pointer-events: none; /* чтобы не мешал кликам */
+  z-index: 10000;
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 32px; /* расстояние между логотипом и гифками */
+  margin-top: 0px;
+}
+
+.logo {
+  height: 100px; /* или другой нужный размер */
+}
+
+.nav-gifs {
+  display: flex;
+  gap: 5px; /* расстояние между гифками */
+}
