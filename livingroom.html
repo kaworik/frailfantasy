@@ -27,22 +27,37 @@
       height: auto;
       border: 1px solid #ff0000; /* видимая граница холста */
       box-sizing: border-box;
+      position: relative;
+      left: -650px; /* сдвиг холста вправо */
     }
 
     .controls {
       flex: 0 0 auto;
       position: fixed;
       bottom: 0px;
-      left: 310px;
+      left: 390px;
       transform: translateX(-50%);
-      background: rgb(0, 0, 0); /* полупрозрачный фон вместо яркого */
+      background: rgba(255, 149, 0, 0); /* полупрозрачный фон вместо яркого */
       text-align: left;
-      padding: 1px 5px;
+      padding: 0px 0px;
       border-radius: 1px;
       display: flex;
       align-items: left;
       gap: 1px;
       z-index: 1000;
+
+      /*统一 стиль шрифта для всего меню*/
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      color: #000000;
+    }
+
+    /* наследуем шрифт и стиль для всех элементов внутри меню */
+    .controls * {
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      box-sizing: border-box;
     }
 
     .controls button, .controls input {
@@ -50,22 +65,68 @@
       padding: 6px 10px;
       font-size: 13px;
       cursor: pointer;
-      border-radius: 1px;
+      border-radius: 0px;
       border: none;
-      background: rgb(0, 0, 0);
-      color: #ffffff;
+      background: rgba(255, 0, 0, 0);
+      color: #000000;
     }
 
     .controls label {
-      color: rgb(255, 255, 255);
-      font-size: 12px;
-      margin: 0 6px;
+      color: rgb(0, 0, 0);
+      font-size: 13px;
+      margin: 0 0px;
     }
 
     /* мелкая адаптация для счётчика */
-    #counter { margin: 0 6px; color: #fff; font-size: 12px; }
+    #counter { margin: 0 0px; color: #000000; font-size: 13px; }
 
-    /* palette removed — возвращаемся без палитр */
+    /* palette */
+    .palette {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+    }
+    .color-picker {
+      width: 34px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .right-slideshow {
+      position: fixed;
+      right: -600px;
+      top: 85%;
+      transform: translateY(-50%);
+      width: 10000px;
+      height: 10000px;
+      width: min(10000px, 80vw);
+      height: min(10000px, 80vh);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      pointer-events: none; /* чтобы не мешать клику/перетаскиванию */
+      z-index: 1400;
+    }
+    .right-slideshow img {
+      max-width: 100%;
+      max-height: 100%;
+      opacity: 0;
+      object-fit: contain;
+      transition: opacity 1.2s cubic-bezier(0.22,1,0.36,1), transform 1.2s cubic-bezier(0.22,1,0.36,1);
+      transform: scale(1);
+      will-change: opacity, transform;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,0.35));
+    }
+    .right-slideshow img.visible {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+
   </style>
 </head>
 <body>
@@ -78,12 +139,15 @@
     </nav>
   </header>
 
-  <img src="png/fraillove.png" alt="watermark" class="watermark">
 
   <video id="video" autoplay playsinline style="display:none;"></video>
 
-  <!-- холст без палитры -->
+  <!-- холст -->
   <canvas id="a3canvas" width="2480" height="3508"></canvas>
+  <!-- new: right-side slideshow container -->
+  <div class="right-slideshow" aria-hidden="true">
+    <img id="slideshowImg" src="" alt="">
+  </div>
 
   <div class="controls">
     <button id="startBtn">Start</button>
@@ -92,9 +156,20 @@
     <button id="exportBtn">Export</button>
     <button id="exportPdfBtn">Export PDF</button>
     <button id="randomBtn">Randomize</button>
+
+    <!-- Undo / Redo -->
+    <button id="undoBtn" title="Undo">Undo</button>
+    <button id="redoBtn" title="Redo">Redo</button>
+
     <label>Interval (sec):
       <input id="intervalInput" type="number" value="0.5" min="0.05" step="0.05" style="width:60px;">
     </label>
+
+    <!-- Palette: оставлен только цветовой input без свотчей и без подписи цвета -->
+    <div class="palette" title="Выберите цвет для двойного клика">
+      <input id="colorPicker" class="color-picker" type="color" value="#000000" title="Другой цвет">
+    </div>
+
     <p id="counter">Photos: 0</p>
   </div>
 
@@ -120,19 +195,57 @@
     let holdStartPos = null;
     let holdActive = false;
 
-    // список PNG в папке png/delete — если имена другие, поправь их
-    const deleteImages = [
-      "png/delete/delete1.png",
-      "png/delete/delete2.png",
-      "png/delete/delete3.png",
-      "png/delete/delete4.png",
-      "png/delete/delete5.png",
-      "png/delete/delete6.png",
-      "png/delete/delete7.png",
-      "png/delete/delete8.png",
-      "png/delete/delete9.png",
-      "png/delete/delete10.png"
+        // список PNG в папке png/delete — если имена другие, поправь их
+    const deleteFiles = [
+      "0JBglow.png",
+      "0JBglow3.png",
+      "0JBglow4.png",
+      "0JBglow5.png",
+      "0jBlaz2.png",
+      "0jfw101.png",
+      "0jfw102.png",
+      "0jfw103.png",
+      "0JGglow.png",
+      "0JGglow1.png",
+      "0jOlaz2.png",
+      "0JPglow1.png",
+      "0JPkglow1.png",
+      "0jPllaz2.png",
+      "0Jsand1.png",
+      "0jYlaz2.png",
+      "CHAOS.png",
+      "delete1.png",
+      "delete10.png",
+      "delete2.png",
+      "delete3.png",
+      "delete4.png",
+      "delete5.png",
+      "delete6.png",
+      "delete7.png",
+      "delete8.png",
+      "delete9.png",
+      "dirt.png",
+      "File0002.png",
+      "File0003.png",
+      "File0005.png",
+      "File0010.png",
+      "File0011.png",
+      "File0016.png",
+      "File0312.png",
+      "File0313.png",
+      "illogic.png",
+      "jonbliz1.png",
+      "jonbliz2.png",
+      "MOYA3.png",
+      "MOYA4.png",
+      "sun blast.png",
+      "sun burst.png",
+      "WA10.png",
+      "WA11.png",
+      "water.png"
     ];
+    // build safe URLs (encode names with spaces/special chars)
+    const deleteImages = deleteFiles.map(f => "png/delete/" + encodeURIComponent(f));
 
     // delete indicator (attach PNG to cursor while holding)
     const delIndicator = document.createElement('img');
@@ -151,6 +264,144 @@
     // photos can be Image objects or color objects {type:'color', color:'#rrggbb'}
     let photos = [];
     let timer = null;
+
+    // undo/redo stacks (store serialized snapshots)
+    const undoStack = [];
+    const redoStack = [];
+    const UNDO_LIMIT = 100;
+
+    // palette state (свободный выбор цвета через input)
+    let selectedColor = '#000000';
+
+    // hover/scale animation state
+    let scales = [];                 // current scale for each cell
+    const animations = {};           // animations[index] = { start, from, to, duration }
+    let hoverIndex = -1;
+    const HOVER_SCALE = 1.001;        // target scale when hovered
+    const ANIM_DURATION = 500;       // ms
+
+    // easing: мягкая bezier-подобная кривая (approximation)
+    function easeOutBezierApprox(t) {
+      // approximation of a smooth bezier easing (fast start, gentle end)
+      return 1 - Math.pow(1 - t, 3); // easeOutCubic (behaves like a bezier easing)
+    }
+
+    function ensureScales() {
+      if (scales.length < photos.length) {
+        for (let i = scales.length; i < photos.length; i++) scales[i] = 1;
+      } else if (scales.length > photos.length) {
+        scales.length = photos.length;
+      }
+    }
+
+    function startScaleAnimation(index, to) {
+      ensureScales();
+      const now = performance.now();
+      animations[index] = {
+        start: now,
+        from: (typeof scales[index] === 'number' ? scales[index] : 1),
+        to: to,
+        duration: ANIM_DURATION
+      };
+      requestAnimationFrame(animateFrame);
+    }
+
+    let rafRunning = false;
+    function animateFrame() {
+      if (rafRunning) return;
+      rafRunning = true;
+      const loop = (now) => {
+        let needAnother = false;
+        for (const key in animations) {
+          const idx = Number(key);
+          const anim = animations[idx];
+          if (!anim) continue;
+          const elapsed = now - anim.start;
+          const t = Math.min(1, Math.max(0, elapsed / anim.duration));
+          const e = easeOutBezierApprox(t);
+          scales[idx] = anim.from + (anim.to - anim.from) * e;
+          if (t < 1) needAnother = true;
+          else delete animations[idx];
+        }
+        redraw(); // перерисовать с учётом текущих scale
+        if (needAnother) requestAnimationFrame(loop);
+        else rafRunning = false;
+      };
+      requestAnimationFrame(loop);
+    }
+
+    // utility: serialize / restore photos for undo/redo
+    function serializePhotos() {
+      return photos.map(entry => {
+        if (!entry) return null;
+        if (entry.type === 'color') return { type: 'color', color: entry.color };
+        if (entry instanceof HTMLImageElement) return { type: 'img', src: entry.src };
+        // fallback
+        try {
+          return { type: 'img', src: entry.src || '' };
+        } catch (e) {
+          return null;
+        }
+      });
+    }
+
+    function restoreFromSnapshot(snapshot) {
+      photos = snapshot.map(entry => {
+        if (!entry) return null;
+        if (entry.type === 'color') return { type: 'color', color: entry.color };
+        if (entry.type === 'img') {
+          const img = new Image();
+          img.src = entry.src;
+          return img;
+        }
+        return null;
+      });
+      ensureScales();
+      redraw();
+    }
+
+    function pushUndo() {
+      try {
+        undoStack.push(JSON.parse(JSON.stringify(serializePhotos())));
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        updateUndoRedoButtons();
+      } catch (e) {
+        // ignore serialization errors
+      }
+    }
+
+    function clearRedo() {
+      redoStack.length = 0;
+      updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+      undoBtn.disabled = undoStack.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function doUndo() {
+      if (undoStack.length === 0) return;
+      // save current to redo
+      try {
+        redoStack.push(JSON.parse(JSON.stringify(serializePhotos())));
+        const snap = undoStack.pop();
+        restoreFromSnapshot(snap);
+        updateUndoRedoButtons();
+      } catch (e) { console.warn(e); }
+    }
+
+    function doRedo() {
+      if (redoStack.length === 0) return;
+      try {
+        undoStack.push(JSON.parse(JSON.stringify(serializePhotos())));
+        const snap = redoStack.pop();
+        restoreFromSnapshot(snap);
+        updateUndoRedoButtons();
+      } catch (e) { console.warn(e); }
+    }
 
     function getGridSettingsFor(n) {
       if (n < 1) return { COLS: 1, ROWS: 1, CELL_W: A3_WIDTH, CELL_H: A3_HEIGHT };
@@ -181,7 +432,11 @@
     }
 
     function reset() {
+      // save state for undo
+      pushUndo();
+      clearRedo();
       photos = [];
+      ensureScales();
       redraw();
     }
 
@@ -193,7 +448,10 @@
       const img = new Image();
       img.src = tmpCanvas.toDataURL("image/png");
       img.onload = () => {
+        pushUndo();
+        clearRedo();
         photos.push(img);
+        ensureScales();
         redraw();
       };
     }
@@ -214,6 +472,7 @@
     }
 
     function redraw(highlightIndex = -1) {
+      ensureScales();
       const n = photos.length;
       const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
       ctx.fillStyle = "white";
@@ -226,29 +485,36 @@
         const x = col * CELL_W;
         const y = row * CELL_H;
 
+        // determine scale for this cell (default 1)
+        const s = (typeof scales[i] === 'number') ? scales[i] : 1;
+        const drawW = CELL_W * s;
+        const drawH = CELL_H * s;
+        const dx = x + (CELL_W - drawW) / 2;
+        const dy = y + (CELL_H - drawH) / 2;
+
         if (!entry) {
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(x, y, CELL_W, CELL_H);
+          ctx.fillRect(dx, dy, drawW, drawH);
           continue;
         }
 
         if (entry.type === 'color') {
           ctx.fillStyle = entry.color;
-          ctx.fillRect(x, y, CELL_W, CELL_H);
+          ctx.fillRect(dx, dy, drawW, drawH);
         } else if (entry instanceof HTMLImageElement) {
           try {
-            ctx.drawImage(entry, x, y, CELL_W, CELL_H);
+            ctx.drawImage(entry, dx, dy, drawW, drawH);
           } catch (err) {
             ctx.fillStyle = "#eee";
-            ctx.fillRect(x, y, CELL_W, CELL_H);
+            ctx.fillRect(dx, dy, drawW, drawH);
           }
         } else {
           // fallback for plain Image objects
           try {
-            ctx.drawImage(entry, x, y, CELL_W, CELL_H);
+            ctx.drawImage(entry, dx, dy, drawW, drawH);
           } catch (err) {
             ctx.fillStyle = "#fff";
-            ctx.fillRect(x, y, CELL_W, CELL_H);
+            ctx.fillRect(dx, dy, drawW, drawH);
           }
         }
       }
@@ -290,16 +556,61 @@
     document.getElementById("exportBtn").onclick = exportPng;
     document.getElementById("exportPdfBtn").onclick = exportPdf;
 
+    // Undo / Redo buttons
+    document.getElementById('undoBtn').addEventListener('click', () => { doUndo(); });
+    document.getElementById('redoBtn').addEventListener('click', () => { doRedo(); });
+    updateUndoRedoButtons();
+
     // randomize button
     const randomBtn = document.getElementById("randomBtn");
     if (randomBtn) {
+      // single click -> one shuffle
       randomBtn.addEventListener("click", () => {
-        for (let i = photos.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [photos[i], photos[j]] = [photos[j], photos[i]];
-        }
-        redraw();
+        shufflePhotos();
       });
+
+      // hold -> repeat shuffle every 500ms
+      let randomHoldTimer = null;
+      const HOLD_INTERVAL_MS = 500;
+
+      function startRandomHold() {
+        if (randomHoldTimer) return;
+        shufflePhotos(); // immediate first shuffle
+        randomHoldTimer = setInterval(shufflePhotos, HOLD_INTERVAL_MS);
+      }
+
+      function stopRandomHold() {
+        if (!randomHoldTimer) return;
+        clearInterval(randomHoldTimer);
+        randomHoldTimer = null;
+      }
+
+      // mouse events
+      randomBtn.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return; // only left button
+        startRandomHold();
+      });
+      window.addEventListener("mouseup", stopRandomHold);
+      randomBtn.addEventListener("mouseleave", stopRandomHold);
+
+      // touch support
+      randomBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        startRandomHold();
+      }, { passive: false });
+      window.addEventListener("touchend", stopRandomHold);
+    }
+
+    function shufflePhotos() {
+      if (photos.length <= 1) return;
+      pushUndo();
+      clearRedo();
+      for (let i = photos.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [photos[i], photos[j]] = [photos[j], photos[i]];
+      }
+      ensureScales();
+      redraw();
     }
 
     // canvas handlers (hold/drag/delete) — оставлены как было
@@ -335,7 +646,11 @@
             holdTimer = null;
             holdActive = false;
             delIndicator.style.display = "none";
+            // save for undo, then delete
+            pushUndo();
+            clearRedo();
             photos.splice(holdIndex, 1);
+            ensureScales();
             holdIndex = -1;
             redraw();
           }
@@ -343,6 +658,32 @@
 
         e.preventDefault();
       }
+    });
+
+    // hover handling on canvas: плавное уменьшение при наведении
+    canvas.addEventListener('mousemove', (e) => {
+      // don't apply hover while dragging or during hold delete
+      if (isDragging || holdActive) return;
+
+      const { cx, cy } = clientToCanvas(e);
+      const n = photos.length;
+      const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
+      const col = Math.floor(cx / CELL_W);
+      const row = Math.floor(cy / CELL_H);
+      const idx = row * COLS + col;
+
+      if (idx !== hoverIndex) {
+        // restore previous hovered cell
+        if (hoverIndex >= 0 && hoverIndex < photos.length) startScaleAnimation(hoverIndex, 1);
+        // shrink new cell
+        if (idx >= 0 && idx < photos.length) startScaleAnimation(idx, HOVER_SCALE);
+        hoverIndex = (idx >= 0 && idx < photos.length) ? idx : -1;
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      if (hoverIndex >= 0 && hoverIndex < photos.length) startScaleAnimation(hoverIndex, 1);
+      hoverIndex = -1;
     });
 
     window.addEventListener("mousemove", (e) => {
@@ -397,12 +738,15 @@
       dragFrom = -1;
       dragOver = -1;
       if (from >= 0 && to >= 0 && from !== to) {
+        pushUndo();
+        clearRedo();
         [photos[from], photos[to]] = [photos[to], photos[from]];
       }
+      ensureScales();
       redraw();
     });
 
-    // double-click: fill clicked cell with black
+    // double-click: fill clicked cell with selected color
     canvas.addEventListener('dblclick', (e) => {
       const { cx, cy } = clientToCanvas(e);
       const n = photos.length;
@@ -411,13 +755,86 @@
       const row = Math.floor(cy / CELL_H);
       const idx = row * COLS + col;
       if (idx >= 0 && idx < photos.length) {
-        photos[idx] = { type: 'color', color: '#000000' };
+        pushUndo();
+        clearRedo();
+        photos[idx] = { type: 'color', color: selectedColor };
+        ensureScales();
         redraw();
       }
     });
 
+    // palette: оставлен только input для выбора цвета
+    const colorPicker = document.getElementById('colorPicker');
+    colorPicker.value = selectedColor;
+    colorPicker.addEventListener('input', (e) => {
+      selectedColor = e.target.value;
+    });
+
     // initial draw
+    ensureScales();
     redraw();
+    /* new: right-side slideshow logic
+       - uses existing deleteImages[] (создан ранее в скрипте)
+       - плавное появление -> видимость -> затухание -> смена изображения в лупе
+    */
+    (function() {
+      const containerImg = document.getElementById('slideshowImg');
+      if (!containerImg) return;
+      if (!Array.isArray(deleteImages) || deleteImages.length === 0) {
+        // можно заполнить вручную, если переменная отсутствует
+        return;
+      }
+
+      // preload images
+      const imgs = deleteImages.map(src => {
+        const im = new Image();
+        im.src = src;
+        return im;
+      });
+
+      const FADE_MS = 1010;    // время появления/затухания
+      const VISIBLE_MS = 1110; // время полной видимости между анимациями
+      let idx = 0;
+      let cancelled = false;
+
+      async function showLoop() {
+        while (!cancelled) {
+          const src = deleteImages[idx % deleteImages.length];
+          // set src (do not wait for load strictly, but try to await if possible)
+          containerImg.classList.remove('visible');
+          // small delay to ensure crossfade if same element reused
+          await new Promise(r => setTimeout(r, 40));
+
+          // set new src
+          containerImg.src = src;
+
+          // wait until image loaded or timeout
+          await Promise.race([
+            new Promise(res => {
+              if (containerImg.complete && containerImg.naturalWidth !== 0) return res();
+              const onLoad = () => { containerImg.removeEventListener('load', onLoad); res(); };
+              containerImg.addEventListener('load', onLoad);
+            }),
+            new Promise(res => setTimeout(res, 700)) // max wait for load
+          ]);
+
+          // fade in
+          containerImg.classList.add('visible');
+          await new Promise(r => setTimeout(r, FADE_MS + VISIBLE_MS));
+
+          // fade out
+          containerImg.classList.remove('visible');
+          await new Promise(r => setTimeout(r, FADE_MS));
+
+          idx = (idx + 1) % deleteImages.length;
+        }
+      }
+
+      // start after a small delay so page initialisation looks smooth
+      setTimeout(showLoop, 500);
+      // expose control if needed later
+      window.__deleteSlideshowCancel = () => { cancelled = true; };
+    })();
   </script>
 </body>
 </html>
