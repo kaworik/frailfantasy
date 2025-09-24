@@ -1,19 +1,423 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<title>living room</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>living room</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      flex: 0 0 auto;
+    }
+
+    #a3canvas {
+      flex: 1 1 auto;
+      display: block;
+      margin: 0 auto;
+      background: #ffffff;
+      max-height: calc(100vh - 140px); /* оставляем место под хедер и контролы */
+      width: auto;
+      height: auto;
+      border: 1px solid #ff0000; /* видимая граница холста */
+      box-sizing: border-box;
+    }
+
+    .controls {
+      flex: 0 0 auto;
+      position: fixed;
+      bottom: 0px;
+      left: 310px;
+      transform: translateX(-50%);
+      background: rgb(0, 0, 0); /* полупрозрачный фон вместо яркого */
+      text-align: left;
+      padding: 1px 5px;
+      border-radius: 1px;
+      display: flex;
+      align-items: left;
+      gap: 1px;
+      z-index: 1000;
+    }
+
+    .controls button, .controls input {
+      margin: 2px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 1px;
+      border: none;
+      background: rgb(0, 0, 0);
+      color: #ffffff;
+    }
+
+    .controls label {
+      color: rgb(255, 255, 255);
+      font-size: 12px;
+      margin: 0 6px;
+    }
+
+    /* мелкая адаптация для счётчика */
+    #counter { margin: 0 6px; color: #fff; font-size: 12px; }
+
+    /* palette removed — возвращаемся без палитр */
+  </style>
 </head>
 <body>
-<header class="header-row">
-  <img src="png/logo3.png" class="logo">
-  <nav class="nav-gifs">
-    <a href="index.html"><img src="gifs/lobby.gif"></a>
-    <a href="livingroom.html"><img src="gifs/eye.gif"></a>
-    <a href="kitchen.html"><img src="gifs/world.gif"></a>
-  </nav>
-</header>
-<img src="png/fraillove.png" alt="watermark" class="watermark">
-<script src="cursor.js"></script>
+  <header class="header-row">
+    <img src="png/logo3.png" class="logo">
+    <nav class="nav-gifs">
+      <a href="index.html"><img src="gifs/lobby.gif"></a>
+      <a href="livingroom.html"><img src="gifs/eye.gif"></a>
+      <a href="kitchen.html"><img src="gifs/world.gif"></a>
+    </nav>
+  </header>
+
+  <img src="png/fraillove.png" alt="watermark" class="watermark">
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+
+  <!-- холст без палитры -->
+  <canvas id="a3canvas" width="2480" height="3508"></canvas>
+
+  <div class="controls">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+    <button id="resetBtn">Reset</button>
+    <button id="exportBtn">Export</button>
+    <button id="exportPdfBtn">Export PDF</button>
+    <button id="randomBtn">Randomize</button>
+    <label>Interval (sec):
+      <input id="intervalInput" type="number" value="0.5" min="0.05" step="0.05" style="width:60px;">
+    </label>
+    <p id="counter">Photos: 0</p>
+  </div>
+
+  <script src="cursor.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("a3canvas");
+    const ctx = canvas.getContext("2d");
+    const counter = document.getElementById("counter");
+    const intervalInput = document.getElementById("intervalInput");
+
+    const A3_WIDTH = 2480;
+    const A3_HEIGHT = 3508;
+
+    // long-press delete config
+    const HOLD_DURATION = 400;        // ms until delete triggers
+    const HOLD_STEP_MS = 40;          // update interval for indicator
+    const HOLD_MOVE_CANCEL = 8;       // px movement cancels hold and starts drag
+    let holdTimer = null;
+    let holdProgress = 0;
+    let holdIndex = -1;
+    let holdStartPos = null;
+    let holdActive = false;
+
+    // список PNG в папке png/delete — если имена другие, поправь их
+    const deleteImages = [
+      "png/delete/delete1.png",
+      "png/delete/delete2.png",
+      "png/delete/delete3.png",
+      "png/delete/delete4.png",
+      "png/delete/delete5.png",
+      "png/delete/delete6.png",
+      "png/delete/delete7.png",
+      "png/delete/delete8.png",
+      "png/delete/delete9.png",
+      "png/delete/delete10.png"
+    ];
+
+    // delete indicator (attach PNG to cursor while holding)
+    const delIndicator = document.createElement('img');
+    delIndicator.style.position = "fixed";
+    delIndicator.style.pointerEvents = "none";
+    delIndicator.style.zIndex = 20000;
+    delIndicator.style.width = "72px";
+    delIndicator.style.height = "auto";
+    delIndicator.style.transform = "translate(-50%,-50%)";
+    delIndicator.style.opacity = "0";
+    delIndicator.style.transition = `opacity ${HOLD_STEP_MS}ms linear`;
+    delIndicator.style.display = "none";
+    document.body.appendChild(delIndicator);
+
+    let running = false;
+    // photos can be Image objects or color objects {type:'color', color:'#rrggbb'}
+    let photos = [];
+    let timer = null;
+
+    function getGridSettingsFor(n) {
+      if (n < 1) return { COLS: 1, ROWS: 1, CELL_W: A3_WIDTH, CELL_H: A3_HEIGHT };
+      const aspect = A3_WIDTH / A3_HEIGHT;
+      const COLS = Math.max(1, Math.ceil(Math.sqrt(n * aspect)));
+      const ROWS = Math.ceil(n / COLS);
+      const CELL_W = A3_WIDTH / COLS;
+      const CELL_H = A3_HEIGHT / ROWS;
+      return { COLS, ROWS, CELL_W, CELL_H };
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => alert("Ошибка камеры: " + err));
+
+    function start() {
+      if (running) return;
+      running = true;
+      const raw = parseFloat(intervalInput.value);
+      const sec = (!isNaN(raw) && raw > 0) ? raw : 0.5;
+      const intervalMs = Math.max(50, Math.round(sec * 1000));
+      timer = setInterval(capture, intervalMs);
+    }
+
+    function stop() {
+      running = false;
+      clearInterval(timer);
+    }
+
+    function reset() {
+      photos = [];
+      redraw();
+    }
+
+    function capture() {
+      const tmpCanvas = document.createElement("canvas");
+      tmpCanvas.width = video.videoWidth;
+      tmpCanvas.height = video.videoHeight;
+      tmpCanvas.getContext("2d").drawImage(video, 0, 0);
+      const img = new Image();
+      img.src = tmpCanvas.toDataURL("image/png");
+      img.onload = () => {
+        photos.push(img);
+        redraw();
+      };
+    }
+
+    // drag / reorder state
+    let isDragging = false;
+    let dragFrom = -1;
+    let dragOver = -1;
+
+    // utility: map client coords to canvas-space coords
+    function clientToCanvas(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const cx = (e.clientX - rect.left) * scaleX;
+      const cy = (e.clientY - rect.top) * scaleY;
+      return { cx, cy };
+    }
+
+    function redraw(highlightIndex = -1) {
+      const n = photos.length;
+      const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, A3_WIDTH, A3_HEIGHT);
+
+      for (let i = 0; i < photos.length; i++) {
+        const entry = photos[i];
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const x = col * CELL_W;
+        const y = row * CELL_H;
+
+        if (!entry) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(x, y, CELL_W, CELL_H);
+          continue;
+        }
+
+        if (entry.type === 'color') {
+          ctx.fillStyle = entry.color;
+          ctx.fillRect(x, y, CELL_W, CELL_H);
+        } else if (entry instanceof HTMLImageElement) {
+          try {
+            ctx.drawImage(entry, x, y, CELL_W, CELL_H);
+          } catch (err) {
+            ctx.fillStyle = "#eee";
+            ctx.fillRect(x, y, CELL_W, CELL_H);
+          }
+        } else {
+          // fallback for plain Image objects
+          try {
+            ctx.drawImage(entry, x, y, CELL_W, CELL_H);
+          } catch (err) {
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(x, y, CELL_W, CELL_H);
+          }
+        }
+      }
+
+      // highlight target cell while dragging
+      if (highlightIndex >= 0 && highlightIndex < photos.length) {
+        const col = highlightIndex % COLS;
+        const row = Math.floor(highlightIndex / COLS);
+        const x = col * CELL_W;
+        const y = row * CELL_H;
+        ctx.save();
+        ctx.strokeStyle = "rgba(0,128,255,0.9)";
+        ctx.lineWidth = Math.max(6, Math.min(12, Math.min(CELL_W, CELL_H) * 0.02));
+        ctx.strokeRect(x + 2, y + 2, CELL_W - 4, CELL_H - 4);
+        ctx.restore();
+      }
+
+      counter.textContent = "Photos: " + photos.length;
+    }
+
+    function exportPng() {
+      const link = document.createElement("a");
+      link.download = "collage.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+
+    function exportPdf() {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "pt", "a3");
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+      pdf.save("collage.pdf");
+    }
+
+    document.getElementById("startBtn").onclick = start;
+    document.getElementById("stopBtn").onclick = stop;
+    document.getElementById("resetBtn").onclick = reset;
+    document.getElementById("exportBtn").onclick = exportPng;
+    document.getElementById("exportPdfBtn").onclick = exportPdf;
+
+    // randomize button
+    const randomBtn = document.getElementById("randomBtn");
+    if (randomBtn) {
+      randomBtn.addEventListener("click", () => {
+        for (let i = photos.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [photos[i], photos[j]] = [photos[j], photos[i]];
+        }
+        redraw();
+      });
+    }
+
+    // canvas handlers (hold/drag/delete) — оставлены как было
+    canvas.addEventListener("mousedown", (e) => {
+      if (running) return; // только на паузе
+      const { cx, cy } = clientToCanvas(e);
+      const n = photos.length;
+      const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
+      const col = Math.floor(cx / CELL_W);
+      const row = Math.floor(cy / CELL_H);
+      const idx = row * COLS + col;
+      if (idx >= 0 && idx < photos.length) {
+        // при старте удержания выбираем случайный PNG для индикатора
+        delIndicator.src = deleteImages[Math.floor(Math.random() * deleteImages.length)];
+
+        // start potential long-press deletion
+        holdActive = true;
+        holdIndex = idx;
+        holdStartPos = { x: e.clientX, y: e.clientY };
+        holdProgress = 0;
+        delIndicator.style.left = (e.clientX) + "px";
+        delIndicator.style.top = (e.clientY) + "px";
+        delIndicator.style.display = "block";
+        delIndicator.style.opacity = "0";
+
+        const steps = Math.max(1, Math.round(HOLD_DURATION / HOLD_STEP_MS));
+        const increment = 1 / steps;
+        holdTimer = setInterval(() => {
+          holdProgress = Math.min(1, holdProgress + increment);
+          delIndicator.style.opacity = String(holdProgress);
+          if (holdProgress >= 1) {
+            clearInterval(holdTimer);
+            holdTimer = null;
+            holdActive = false;
+            delIndicator.style.display = "none";
+            photos.splice(holdIndex, 1);
+            holdIndex = -1;
+            redraw();
+          }
+        }, HOLD_STEP_MS);
+
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (holdActive) {
+        delIndicator.style.left = (e.clientX) + "px";
+        delIndicator.style.top = (e.clientY) + "px";
+        const dx = Math.abs(e.clientX - (holdStartPos && holdStartPos.x || 0));
+        const dy = Math.abs(e.clientY - (holdStartPos && holdStartPos.y || 0));
+        if (dx > HOLD_MOVE_CANCEL || dy > HOLD_MOVE_CANCEL) {
+          if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+          holdActive = false;
+          delIndicator.style.display = "none";
+          if (holdIndex >= 0 && holdIndex < photos.length) {
+            isDragging = true;
+            dragFrom = holdIndex;
+            dragOver = holdIndex;
+            redraw(dragOver);
+          }
+          holdIndex = -1;
+          return;
+        }
+      }
+
+      if (!isDragging) return;
+      const { cx, cy } = clientToCanvas(e);
+      const n = photos.length;
+      const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
+      const col = Math.floor(cx / CELL_W);
+      const row = Math.floor(cy / CELL_H);
+      let idx = row * COLS + col;
+      if (idx < 0) idx = 0;
+      if (idx > photos.length - 1) idx = photos.length - 1;
+      if (idx !== dragOver) {
+        dragOver = idx;
+        redraw(dragOver);
+      }
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (holdActive) {
+        holdActive = false;
+        if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+        delIndicator.style.display = "none";
+        holdIndex = -1;
+        return;
+      }
+
+      if (!isDragging) return;
+      isDragging = false;
+      const from = dragFrom;
+      const to = dragOver;
+      dragFrom = -1;
+      dragOver = -1;
+      if (from >= 0 && to >= 0 && from !== to) {
+        [photos[from], photos[to]] = [photos[to], photos[from]];
+      }
+      redraw();
+    });
+
+    // double-click: fill clicked cell with black
+    canvas.addEventListener('dblclick', (e) => {
+      const { cx, cy } = clientToCanvas(e);
+      const n = photos.length;
+      const { COLS, ROWS, CELL_W, CELL_H } = getGridSettingsFor(Math.max(1, n));
+      const col = Math.floor(cx / CELL_W);
+      const row = Math.floor(cy / CELL_H);
+      const idx = row * COLS + col;
+      if (idx >= 0 && idx < photos.length) {
+        photos[idx] = { type: 'color', color: '#000000' };
+        redraw();
+      }
+    });
+
+    // initial draw
+    redraw();
+  </script>
 </body>
 </html>
