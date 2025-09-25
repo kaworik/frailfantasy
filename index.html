@@ -1,28 +1,59 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Lobby</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <title>Lobby</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* авто-воспроизводимое фоновое видео: muted + loop + playsinline */
+    .bg-video {
+      display: block;
+      width: 55%;
+      max-height: 100vh;
+      object-fit: cover;
+      background: #000;
+    }
+    /* если хотите видео на весь фон, раскомментируйте:
+    .bg-video.full {
+      position: fixed; left:0; top:0; width:100%; height:100%; z-index:-1; object-fit:cover;
+    }
+    */
+  </style>
 </head>
 <body>
-<header class="header-row">
-  <img src="png/logo.png" class="logo">
-  <nav class="nav-gifs">
-    <a href="index.html" class="nav-item">
-      <img src="gifs/lobby.gif" alt="lobby">
-      <img src="png/navhelp/helpnav2.png" alt="helpnav2" class="nav-popup">
-    </a>
-    <a href="livingroom.html" class="nav-item">
-      <img src="gifs/eye.gif" alt="livingroom">
-      <img src="png/navhelp/helpnav3.png" alt="helpnav3" class="nav-popup">
-    </a>
-    <!-- ссылка с всплывающей PNG -->
-    <a href="kitchen.html" class="nav-item">
-      <img src="gifs/world.gif" alt="kitchen">
-      <img src="png/navhelp/nav_kitchen.png" alt="nav_kitchen" class="nav-popup">
-    </a>
-  </nav>
-</header>
-<script src="cursor.js"></script>
+  <header class="header-row">
+    <img src="png/logo.png" class="logo">
+    <nav class="nav-gifs">
+      <a href="index.html" class="nav-item">
+        <img src="gifs/lobby.gif" alt="lobby">
+        <img src="png/navhelp/helpnav2.png" alt="helpnav2" class="nav-popup">
+      </a>
+      <a href="livingroom.html" class="nav-item">
+        <img src="gifs/eye.gif" alt="livingroom">
+        <img src="png/navhelp/helpnav3.png" alt="helpnav3" class="nav-popup">
+      </a>
+      <a href="kitchen.html" class="nav-item">
+        <img src="gifs/world.gif" alt="kitchen">
+        <img src="png/navhelp/nav_kitchen.png" alt="nav_kitchen" class="nav-popup">
+      </a>
+    </nav>
+  </header>
+
+  <!-- Автовоспроизводимое (muted) цикличное видео -->
+  <video id="bgVideo" class="bg-video" autoplay muted loop playsinline preload="auto">
+    <source src="videos/NUDAVAY.mp4" type="video/mp4">
+    Ваш браузер не поддерживает видео.
+  </video>
+
+  <script src="cursor.js"></script>
+  <script>
+    // Попытка явно запустить (на некоторых браузерах это помогает)
+    (async () => {
+      const v = document.getElementById('bgVideo');
+      if (v && v.paused) {
+        try { await v.play(); } catch (e) { /* игнорируем блокировку браузера */ }
+      }
+    })();
+  </script>
 </body>
 </html>
